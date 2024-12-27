@@ -12,6 +12,13 @@ export default {
         background: "var(--background)",
         foreground: "var(--foreground)",
       },
+      backgroundImage: {
+        'grid': 'linear-gradient(to right, var(--grid-color, #ffffff) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-color, #ffffff) 1px, transparent 1px)',
+      },
+      fontFamily: {
+        inter: ['Inter', 'sans-serif'],
+        roboto: ['Roboto', 'sans-serif'],
+      },
     },
   },
   plugins: [],
