@@ -1,5 +1,7 @@
 "use client";
+
 import React, { useState, useEffect } from 'react';
+import { ObjectId } from 'bson';
 import { useParams, useRouter } from 'next/navigation';
 import {
   DndContext,
@@ -7,7 +9,10 @@ import {
   useSensor,
   PointerSensor,
   closestCorners,
-  DragEndEvent
+  DragEndEvent,
+  DragOverlay,
+  useDraggable,
+  useDroppable
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -18,13 +23,19 @@ import { CSS } from '@dnd-kit/utilities';
 import { Plus, MoreVertical, X, Edit2, Trash2, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 
+enum TaskStatus {
+  TODO = 'To Do',
+  IN_PROGRESS = 'In Progress',
+  DONE = 'Done'
+}
+
 interface Task {
-  _id?: string; // Made required since it's used in SortableTask
+  _id: string;
   title: string;
   description?: string;
-  status: 'To Do' | 'In Progress' | 'Done';
-  createdAt?: Date;
-  isUrgent?: boolean;
+  status: TaskStatus;
+  createdAt: Date;
+  isUrgent: boolean;
 }
 
 interface Column {
@@ -48,79 +59,140 @@ interface TaskModalProps {
 }
 
 const SortableTask = ({ task, onEdit, onDelete, columnId }: {
-  task: Task;
-  onEdit: () => void;
-  onDelete: () => void;
-  columnId: string;
-}) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition
-  } = useSortable({ id: task._id });
+    task: Task;
+    onEdit: () => void;
+    onDelete: () => void;
+    columnId: string;
+  }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging
+    } = useSortable({
+      id: task._id,
+      data: {
+        type: 'Task',
+        task,
+        columnId
+      }
+    });
+  
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+      position: isDragging ? 'relative' as const : 'static' as const,
+      zIndex: isDragging ? 999 : 'auto',
+    };
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className="bg-white p-3 rounded shadow-sm border-2 border-gray-100 hover:border-[#75d22e] group relative"
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="font-mono">{task.title}</p>
-          {task.description && (
-            <p className="text-sm text-gray-600 font-mono mt-1">{task.description}</p>
-          )}
-          <p className="text-xs text-gray-500 mt-1">{task.status}</p>
+    return (
+        <div
+          ref={setNodeRef}
+          style={style}
+          {...attributes}
+          {...listeners}
+          className={`bg-white p-3 rounded shadow-sm border-2 ${
+            isDragging ? 'border-[#75d22e] shadow-lg' : 'border-gray-100 hover:border-[#75d22e]'
+          } group relative cursor-grab active:cursor-grabbing`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-grow">
+              <p className="font-mono">{task.title}</p>
+              {task.description && (
+                <p className="text-sm text-gray-600 font-mono mt-1">{task.description}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">{task.status}</p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {task.isUrgent && (
+                <AlertTriangle size={16} className="text-red-500" />
+              )}
+              <div className="flex gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded"
+                >
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded text-red-500">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        {task.isUrgent && (
-          <AlertTriangle size={16} className="text-red-500 flex-shrink-0" />
-        )}
-      </div>
-      <div className="absolute right-2 top-2 hidden group-hover:flex gap-2">
-        <button
-          onClick={onEdit}
-          className="p-1 hover:bg-gray-100 rounded"
-        >
-          <Edit2 size={14} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-1 hover:bg-gray-100 rounded text-red-500"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-    </div>
-  );
-};
+      );
+    };
+    
+    const Column = ({ column, onDeleteColumn, children }: {
+        column: Column;
+        onDeleteColumn: () => void;
+        children: React.ReactNode;
+      }) => {
+        const { setNodeRef } = useDroppable({
+          id: `column-${column._id}`,
+          data: {
+            type: 'Column',
+            columnId: column._id
+          }
+        });
+      
+        return (
+          <div className="flex-shrink-0 w-80 bg-white rounded-lg border-2 border-[#75d22e] p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-mono font-bold">{column.title}</h3>
+              <button
+                onClick={onDeleteColumn}
+                className="text-red-500 hover:text-red-700"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+      
+            <div
+              ref={setNodeRef}
+              className={`space-y-2 min-h-[200px] rounded-lg ${
+                column.tasks.length === 0 ? 'border-2 border-dashed border-gray-200' : ''
+              }`}
+            >
+              <SortableContext items={column.tasks.map(task => task._id)} strategy={verticalListSortingStrategy}>
+                {children}
+              </SortableContext>
+            </div>
+          </div>
+        );
+      };
+    
 
 const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSubmit, columnId }) => {
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [isUrgent, setIsUrgent] = useState(task?.isUrgent || false);
-  const [status, setStatus] = useState<'To Do' | 'In Progress' | 'Done'>(task?.status || 'To Do');
+  const [status, setStatus] = useState<TaskStatus>(task?.status || TaskStatus.TODO);
+  
 
   useEffect(() => {
     if (task) {
       setTitle(task.title);
       setDescription(task.description || '');
-      setIsUrgent(task.isUrgent || false);
+      setIsUrgent(task.isUrgent);
       setStatus(task.status);
     } else {
       setTitle('');
       setDescription('');
       setIsUrgent(false);
-      setStatus('To Do');
+      setStatus(TaskStatus.TODO);
     }
   }, [task]);
 
@@ -172,12 +244,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSubmit, 
             <label className="block font-mono mb-1">Status</label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as 'To Do' | 'In Progress' | 'Done')}
+              onChange={(e) => setStatus(e.target.value as TaskStatus)}
               className="w-full px-4 py-2 border-2 border-[#75d22e] rounded-lg font-mono"
             >
-              <option value="To Do">To Do</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Done">Done</option>
+              {Object.values(TaskStatus).map((statusValue) => (
+                <option key={statusValue} value={statusValue}>
+                  {statusValue}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -212,7 +286,9 @@ const BoardPage = () => {
   const router = useRouter();
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showColumnModal, setShowColumnModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [taskModal, setTaskModal] = useState<{
     isOpen: boolean;
     task?: Task;
@@ -227,68 +303,127 @@ const BoardPage = () => {
     })
   );
 
-  useEffect(() => {
-    const fetchBoard = async () => {
-      try {
-        const response = await axios.get(`http://localhost:5000/api/boards/${params.id}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        setBoard(response.data);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error details:', err);
-        setError('Failed to load board');
-        setLoading(false);
-      }
-    };
+  const fetchBoard = async () => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/boards/${params.id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem(`token`)}` }
+      });
+      setBoard(response.data);
+      setError(null);
+    } catch (err) {
+      const error = err as Error;  // Explicitly cast err as Error
+      console.error('Error details:', error.message);
+      setError('Failed to load board');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
 
+  useEffect(() => {
     fetchBoard();
   }, [params.id]);
-
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!active || !over || !board) return;
 
-    const taskId = active.id as string;
-    let sourceColumnId: string | null = null;
-    let sourceTaskIndex: number = -1;
-    let destinationColumnId: string | null = null;
-    let destinationTaskIndex: number = -1;
+    try {
+      const taskId = active.id as string;
+      const overId = over.id as string;
+      const newColumns = [...board.columns];
+      
+      let sourceColumn: Column | undefined;
+      let targetColumn: Column | undefined;
+      let sourceTask: Task | undefined;
+      let sourceTaskIndex = -1;
 
-    board.columns.forEach((column) => {
-      const taskIndex = column.tasks.findIndex((task) => task._id === taskId);
-      if (taskIndex !== -1) {
-        sourceColumnId = column._id;
-        sourceTaskIndex = taskIndex;
+      // Find source task and column
+      for (const column of newColumns) {
+        const taskIndex = column.tasks.findIndex(t => t._id === taskId);
+        if (taskIndex !== -1) {
+          sourceColumn = column;
+          sourceTask = column.tasks[taskIndex];
+          sourceTaskIndex = taskIndex;
+          break;
+        }
       }
-      if (column.tasks.findIndex((task) => task._id === over.id) !== -1) {
-        destinationColumnId = column._id;
-        destinationTaskIndex = column.tasks.findIndex((task) => task._id === over.id);
-      }
-    });
 
-    if (!sourceColumnId || sourceTaskIndex === -1 || !destinationColumnId || destinationTaskIndex === -1) return;
+      // Find target column
+      const targetColumnId = overId.replace('column-', '');
+      targetColumn = newColumns.find(col => col._id === targetColumnId);
 
-    const newColumns = [...board.columns];
-    const sourceColumn = newColumns.find((col) => col._id === sourceColumnId);
-    const destColumn = newColumns.find((col) => col._id === destinationColumnId);
+      if (!sourceColumn || !targetColumn || !sourceTask) return;
 
-    if (!sourceColumn || !destColumn) return;
+      // Remove task from source column
+      sourceColumn.tasks.splice(sourceTaskIndex, 1);
 
-    const [movedTask] = sourceColumn.tasks.splice(sourceTaskIndex, 1);
-    destColumn.tasks.splice(destinationTaskIndex, 0, movedTask);
+      // Add task to target column
+      const updatedTask: Task = {
+        ...sourceTask,
+        status: targetColumn.title as TaskStatus
+      };
+      targetColumn.tasks.push(updatedTask);
 
-    setBoard({ ...board, columns: newColumns });
+      setBoard({ ...board, columns: newColumns });
+
+      await axios.put(
+        `http://localhost:5000/api/boards/${params.id}`,
+        { columns: newColumns },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+      );
+    } catch (err) {
+      console.error('Error updating task position:', err);
+      setError('Failed to update task position');
+      fetchBoard();
+    }
+  };
+
+  const addColumn = async (title: string) => {
+    if (!board) return;
 
     try {
-      await axios.put(`http://localhost:5000/api/boards/${params.id}`, {
-        columns: newColumns
-      }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      const newColumn: Column = {
+        _id: new ObjectId().toString(),
+        title,
+        tasks: []
+      };
+
+      const newColumns = [...board.columns, newColumn];
+      
+      const response = await axios.put(
+        `http://localhost:5000/api/boards/${params.id}`,
+        { columns: newColumns },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+      );
+
+      setBoard(response.data);
+      setShowColumnModal(false);
     } catch (err) {
-      console.error('Error details:', err);
-      setError('Failed to update task position');
+      console.error('Error adding column:', err);
+      setError('Failed to add column');
+    }
+  };
+
+  const deleteColumn = async (columnId: string) => {
+    if (!board) return;
+
+    if (!window.confirm('Are you sure you want to delete this column and all its tasks?')) {
+      return;
+    }
+
+    try {
+      const newColumns = board.columns.filter(col => col._id !== columnId);
+      
+      const response = await axios.put(
+        `http://localhost:5000/api/boards/${params.id}`,
+        { columns: newColumns },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+      );
+
+      setBoard(response.data);
+    } catch (err) {
+      console.error('Error deleting column:', err);
+      setError('Failed to delete column');
     }
   };
 
@@ -296,38 +431,42 @@ const BoardPage = () => {
     if (!board) return;
 
     try {
+      // Find the correct column based on the task status
+      const targetColumnId = board.columns.find(col => 
+        col.title === taskData.status
+      )?._id;
+
+      if (!targetColumnId) {
+        throw new Error('Invalid status selected');
+      }
+
       const newColumns = board.columns.map(col => {
-        if (col._id === taskModal.columnId) {
-          if (taskModal.task) {
-            // Editing existing task
-            return {
-              ...col,
-              tasks: col.tasks.map(t => 
-                t._id === taskModal.task?._id ? {
-                  ...t,
-                  title: taskData.title,
-                  description: taskData.description,
-                  status: taskData.status,
-                  isUrgent: taskData.isUrgent
-                } : t
-              )
-            };
-          } else {
-            // Creating new task
-            const newTask: Task = {
-              _id: Math.random().toString(36).substr(2, 9), // Temporary ID until backend saves
-              title: taskData.title || '',
-              description: taskData.description || '',
-              status: taskData.status || 'To Do',
-              createdAt: new Date(),
-              isUrgent: taskData.isUrgent || false
-            };
-            
-            return {
-              ...col,
-              tasks: [...col.tasks, newTask]
-            };
-          }
+        // If editing existing task, remove it from its current column
+        if (taskModal.task) {
+          col.tasks = col.tasks.filter(t => t._id !== taskModal.task?._id);
+        }
+
+        // Add task to the column matching its status
+        if (col._id === targetColumnId) {
+          const newTask = taskModal.task ? {
+            ...taskModal.task,
+            title: taskData.title || taskModal.task.title,
+            description: taskData.description,
+            status: taskData.status || taskModal.task.status,
+            isUrgent: taskData.isUrgent ?? taskModal.task.isUrgent
+          } : {
+            _id: new ObjectId().toString(),
+            title: taskData.title || 'New Task',
+            description: taskData.description,
+            status: taskData.status || TaskStatus.TODO,
+            createdAt: new Date(),
+            isUrgent: taskData.isUrgent || false
+          };
+
+          return {
+            ...col,
+            tasks: [...col.tasks, newTask]
+          };
         }
         return col;
       });
@@ -337,21 +476,15 @@ const BoardPage = () => {
         { columns: newColumns },
         { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
       );
-
+    
       setBoard(response.data);
+      setError(null);
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        console.error('Error details:', err.response?.data || 'No error response data');
-        setError(err.response?.data?.message || 'Failed to save task');
-      } else if (err instanceof Error) {
-        console.error('Unexpected error:', err.message);
-        setError(err.message);
-      } else {
-        console.error('An unknown error occurred.');
-        setError('Failed to save task');
-      }
+      console.error('Error in task submission:', err);
+      setError('Failed to process task. Please try again.');
+      fetchBoard();
     }
-  };
+  };  
 
   const deleteTask = async (columnId: string, taskId: string) => {
     if (!board) return;
@@ -374,13 +507,22 @@ const BoardPage = () => {
       );
 
       setBoard(response.data);
+      setError(null);
     } catch (err) {
       console.error('Error details:', err);
       setError('Failed to delete task');
+      fetchBoard();
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-screen"><div className="text-xl font-mono">Loading...</div></div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-xl font-mono">Loading...</div>
+      </div>
+    );
+  }
+
   if (!board) return null;
 
   return (
@@ -392,63 +534,112 @@ const BoardPage = () => {
       <div className="min-h-screen bg-gray-50">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold font-mono">{board.title}</h1>
+            <h1 className="text-3xl font-bold font-mono">{board?.title}</h1>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setTaskModal({ isOpen: true, columnId: board?.columns[0]?._id || '' })}
+                className="p-2 px-4 text-white bg-[#75d22e] rounded-full hover:bg-[#64b524] transition-all font-mono flex items-center justify-center gap-2"
+              >
+                <Plus size={20} /> Add Task
+              </button>
+              <button
+                onClick={() => setShowColumnModal(true)}
+                className="p-2 px-4 text-[#75d22e] border-2 border-[#75d22e] rounded-full hover:bg-[#75d22e] hover:text-white transition-all font-mono flex items-center justify-center gap-2"
+              >
+                <Plus size={20} /> Add Column
+              </button>
+            </div>
           </div>
 
-          {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
-              <p className="text-red-700 font-mono">{error}</p>
-            </div>
-          )}
-
-          <div className="flex gap-6 overflow-x-auto pb-4">
-            {board.columns.map((column) => (
+          <div className="flex gap-6 overflow-x-auto pb-4 max-w-[calc(100vw-3rem)]">
+            {board?.columns.map((column) => (
               <div
                 key={column._id}
                 className="flex-shrink-0 w-80 bg-white rounded-lg border-2 border-[#75d22e] p-4"
               >
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-mono font-bold">{column.title}</h3>
-                  <button className="text-gray-500 hover:text-gray-700">
-                    <MoreVertical size={20} />
+                  <button
+                    onClick={() => deleteColumn(column._id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 size={16} />
                   </button>
                 </div>
 
-                <SortableContext
-                  items={column.tasks.map(task => task._id)}
-                  strategy={verticalListSortingStrategy}
-                  >
-                  <div className="space-y-2">
-                    {column.tasks.map((task) => (
-                      <SortableTask
-                        key={task._id}
-                        task={task}
-                        columnId={column._id}
-                        onEdit={() => setTaskModal({ isOpen: true, task, columnId: column._id })}
-                        onDelete={() => deleteTask(column._id, task._id)}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-
-                <button
-                  onClick={() => setTaskModal({ isOpen: true, columnId: column._id })}
-                  className="mt-3 w-full p-2 text-[#75d22e] border-2 border-dashed border-[#75d22e] rounded hover:bg-[#75d22e] hover:text-white transition-all font-mono flex items-center justify-center gap-2"
+                <div
+                  id={`column-${column._id}`}
+                  className={`space-y-2 min-h-[200px] rounded-lg ${
+                    column.tasks.length === 0 ? 'border-2 border-dashed border-gray-200' : ''
+                  }`}
                 >
-                  <Plus size={20} /> Add Task
-                </button>
+                  {column.tasks.map((task) => (
+                    <SortableTask
+                      key={task._id}
+                      task={task}
+                      columnId={column._id}
+                      onEdit={() => setTaskModal({ isOpen: true, task, columnId: column._id })}
+                      onDelete={() => deleteTask(column._id, task._id)}
+                    />
+                  ))}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        <TaskModal
-          isOpen={taskModal.isOpen}
-          task={taskModal.task}
-          columnId={taskModal.columnId}
-          onClose={() => setTaskModal({ isOpen: false, columnId: '' })}
-          onSubmit={handleTaskSubmit}
-        />
+        {/* Column Modal */}
+        {showColumnModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-2xl font-bold font-mono mb-4">Add New Column</h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const title = (e.target as HTMLFormElement).columnTitle.value;
+                  addColumn(title);
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block font-mono mb-1">Column Title</label>
+                  <input
+                    name="columnTitle"
+                    type="text"
+                    required
+                    className="w-full px-4 py-2 border-2 border-[#75d22e] rounded-lg font-mono"
+                  />
+                </div>
+                <div className="flex gap-4">
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-[#75d22e] text-white font-mono rounded-lg hover:bg-[#64b524]"
+                  >
+                    Add Column
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowColumnModal(false)}
+                    className="flex-1 px-4 py-2 border-2 border-gray-300 font-mono rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Task Modal */}
+        {taskModal.isOpen && (
+          <TaskModal
+            isOpen={taskModal.isOpen}
+            task={taskModal.task}
+            columnId={taskModal.columnId}
+            onClose={() => setTaskModal({ isOpen: false, columnId: '' })}
+            onSubmit={handleTaskSubmit}
+          />
+        )}
       </div>
     </DndContext>
   );
