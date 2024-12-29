@@ -26,17 +26,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { Plus, MoreVertical, X, Edit2, Trash2, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 
-enum TaskStatus {
-    TODO = 'To Do',
-    IN_PROGRESS = 'In Progress',
-    DONE = 'Done'
-}
-
 interface Task {
     _id: string;
     title: string;
     description?: string;
-    status: TaskStatus;
+    status: string;
     createdAt: Date;
     isUrgent: boolean;
 }
@@ -59,6 +53,7 @@ interface TaskModalProps {
     onClose: () => void;
     onSubmit: (task: Partial<Task>) => void;
     columnId: string;
+    board: Board | null;
 }
 
 const SortableTask = React.memo(({ task, onEdit, onDelete, columnId }: {
@@ -94,9 +89,8 @@ const SortableTask = React.memo(({ task, onEdit, onDelete, columnId }: {
             style={style}
             {...attributes}
             {...listeners}
-            className={`p-3 mb-2 rounded shadow-sm border-2 ${
-                isDragging ? 'border-[#75d22e] shadow-lg opacity-50' : 'border-gray-100 hover:border-[#75d22e]'
-            } ${task.isUrgent ? 'bg-red-50' : 'bg-white'} 
+            className={`p-3 mb-2 rounded shadow-sm border-2 ${isDragging ? 'border-[#75d22e] shadow-lg opacity-50' : 'border-gray-100 hover:border-[#75d22e]'
+                } ${task.isUrgent ? 'bg-red-50' : 'bg-white'} 
             group relative cursor-grab active:cursor-grabbing touch-none`}
         >
             <div className="flex items-start justify-between gap-2">
@@ -153,9 +147,8 @@ const DroppableColumn = React.memo(({ column, onDeleteColumn, children }: {
 
     return (
         <div className="flex-shrink-0 w-80">
-            <div className={`bg-white rounded-lg border-2 h-full flex flex-col ${
-                isOver ? 'border-[#64b524] shadow-lg' : 'border-[#75d22e]'
-            }`}>
+            <div className={`bg-white rounded-lg border-2 h-full flex flex-col ${isOver ? 'border-[#64b524] shadow-lg' : 'border-[#75d22e]'
+                }`}>
                 <div className="flex justify-between items-center p-4">
                     <h3 className="font-mono font-bold">{column.title}</h3>
                     <button
@@ -168,9 +161,8 @@ const DroppableColumn = React.memo(({ column, onDeleteColumn, children }: {
 
                 <div
                     ref={setNodeRef}
-                    className={`flex-1 overflow-y-auto p-2 min-h-[200px] ${
-                        isOver ? 'bg-gray-50' : ''
-                    }`}
+                    className={`flex-1 overflow-y-auto p-2 min-h-[200px] ${isOver ? 'bg-gray-50' : ''
+                        }`}
                 >
                     <SortableContext
                         items={column.tasks.map(task => task._id)}
@@ -188,38 +180,38 @@ const DroppableColumn = React.memo(({ column, onDeleteColumn, children }: {
 });
 
 
-const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSubmit, columnId }) => {
+const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSubmit, columnId, board }) => {
     const [title, setTitle] = useState(task?.title ?? '');
     const [description, setDescription] = useState(task?.description ?? '');
     const [isUrgent, setIsUrgent] = useState(task?.isUrgent ?? false);
-    const [status, setStatus] = useState<TaskStatus>(task?.status ?? TaskStatus.TODO);
-  
+    const [status, setStatus] = useState<string>(task?.status ?? board?.columns[0]?.title ?? '');
+
     // Reset form when modal opens/closes or task changes
     useEffect(() => {
-      if (task) {
-        setTitle(task.title);
-        setDescription(task.description ?? '');
-        setIsUrgent(task.isUrgent);
-        setStatus(task.status);
-      } else {
-        setTitle('');
-        setDescription('');
-        setIsUrgent(false);
-        setStatus(TaskStatus.TODO);
-      }
-    }, [task, isOpen]);
-  
+        if (task) {
+            setTitle(task.title);
+            setDescription(task.description ?? '');
+            setIsUrgent(task.isUrgent);
+            setStatus(task.status);
+        } else {
+            setTitle('');
+            setDescription('');
+            setIsUrgent(false);
+            setStatus(board?.columns[0]?.title ?? '');
+        }
+    }, [task, isOpen, board]);
+
     const handleSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      onSubmit({
-        title: title.trim(),
-        description: description.trim() || undefined, // Only include if not empty
-        isUrgent,
-        status
-      });
-      onClose();
+        e.preventDefault();
+        onSubmit({
+            title: title.trim(),
+            description: description.trim() || undefined,
+            isUrgent,
+            status
+        });
+        onClose();
     };
-  
+
     if (!isOpen) return null;
 
     return (
@@ -262,12 +254,12 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSubmit, 
                         <label className="block font-mono mb-1">Status</label>
                         <select
                             value={status}
-                            onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                            onChange={(e) => setStatus(e.target.value)}
                             className="w-full px-4 py-2 border-2 border-[#75d22e] rounded-lg font-mono"
                         >
-                            {Object.values(TaskStatus).map((statusValue) => (
-                                <option key={statusValue} value={statusValue}>
-                                    {statusValue}
+                            {board?.columns.map((column: Column) => (
+                                <option key={column._id} value={column.title}>
+                                    {column.title}
                                 </option>
                             ))}
                         </select>
@@ -410,7 +402,7 @@ const BoardPage = () => {
             // Create updated task with new status
             const updatedTask = {
                 ...taskToMove,
-                status: targetColumn.title as TaskStatus
+                status: targetColumn.title
             };
 
             // Create new columns array with updated task positions
@@ -529,7 +521,7 @@ const BoardPage = () => {
                         _id: new ObjectId().toString(),
                         title: taskData.title || 'New Task',
                         description: taskData.description,
-                        status: taskData.status || TaskStatus.TODO,
+                        status: taskData.status || board.columns[0].title,
                         createdAt: new Date(),
                         isUrgent: taskData.isUrgent || false
                     };
@@ -623,29 +615,29 @@ const BoardPage = () => {
                         </div>
                     </div>
                 </div>
-    
+
                 <div className="flex-1 overflow-hidden px-6 pb-6">
                     <div className="h-full flex gap-6 overflow-x-auto">
                         {board?.columns.map((column) => (
                             <DroppableColumn
-                            key={column._id}
-                            column={column}
-                            onDeleteColumn={() => deleteColumn(column._id)}
-                        >
-                            {column.tasks.map((task) => (
-                                <SortableTask
-                                    key={task._id}
-                                    task={task}
-                                    columnId={column._id}
-                                    onEdit={() => setTaskModal({ isOpen: true, task, columnId: column._id })}
-                                    onDelete={() => deleteTask(column._id, task._id)}
-                                />
-                            ))}
-                        </DroppableColumn>
+                                key={column._id}
+                                column={column}
+                                onDeleteColumn={() => deleteColumn(column._id)}
+                            >
+                                {column.tasks.map((task) => (
+                                    <SortableTask
+                                        key={task._id}
+                                        task={task}
+                                        columnId={column._id}
+                                        onEdit={() => setTaskModal({ isOpen: true, task, columnId: column._id })}
+                                        onDelete={() => deleteTask(column._id, task._id)}
+                                    />
+                                ))}
+                            </DroppableColumn>
                         ))}
                     </div>
                 </div>
-    
+
                 {/* Column Modal */}
                 {showColumnModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
@@ -687,18 +679,19 @@ const BoardPage = () => {
                         </div>
                     </div>
                 )}
-    
+
                 {/* Task Modal */}
                 {taskModal.isOpen && (
-                    <TaskModal
-                        isOpen={taskModal.isOpen}
-                        task={taskModal.task}
-                        columnId={taskModal.columnId}
-                        onClose={() => setTaskModal({ isOpen: false, columnId: '' })}
-                        onSubmit={handleTaskSubmit}
-                    />
-                )}
-    
+                <TaskModal
+                    isOpen={taskModal.isOpen}
+                    task={taskModal.task}
+                    columnId={taskModal.columnId}
+                    onClose={() => setTaskModal({ isOpen: false, columnId: '' })}
+                    onSubmit={handleTaskSubmit}
+                    board={board}  // Add this
+                />
+            )}
+
                 <DragOverlay>
                     {activeTask ? (
                         <div className="p-3 rounded shadow-lg border-2 border-[#75d22e] bg-white opacity-80 w-80">
