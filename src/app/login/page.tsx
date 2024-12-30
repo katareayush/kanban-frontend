@@ -28,7 +28,6 @@ const Login: React.FC = () => {
 
       if (token) {
         localStorage.setItem('token', token);
-        // Use Next.js router.push instead of navigate
         router.push('/boards');
       } else {
         setError('Failed to get token.');
@@ -82,12 +81,18 @@ const Login: React.FC = () => {
             type="submit"
             disabled={loading}
             className={`w-full px-8 py-3 bg-[#75d22e] text-white font-bold rounded-full 
-              hover:bg-[#64b524] transition-all
+              hover:bg-[#64b524] transition-all 
               ${loading ? 'opacity-50 cursor-not-allowed' : ''}
             `}
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
+
+            <div className="mt-4">
+                <a href="/forgot-password" className="text-[#75d22e] hover:underline ">
+                   Forgot Password?
+                </a>
+            </div>
 
           <div className='space-y-4'>
             <p className="text-sm  text-gray-600">

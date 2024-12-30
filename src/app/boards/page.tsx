@@ -79,7 +79,7 @@ const BoardsPage: React.FC = () => {
     fetchBoards();
   }, []);
 
-  const token = localStorage.getItem('token');
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   const fetchBoards = async () => {
     try {
