@@ -1,5 +1,5 @@
 "use client";
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent , Suspense} from 'react';
 import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -107,4 +107,25 @@ const ResetPassword = () => {
   );
 };
 
-export default ResetPassword;
+function LoadingFallback() {
+  return (
+    <div className="flex justify-center items-center h-screen">
+      <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-300 w-[400px] font-mono">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#75d22e]" />
+          <h1 className="text-2xl font-bold">Loading...</h1>
+          <p className="text-gray-600">Please wait...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+export default function VerifyEmail() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ResetPassword/>
+    </Suspense>
+  );
+}
