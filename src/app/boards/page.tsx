@@ -74,6 +74,10 @@ const BoardsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const environment = process.env.NEXT_PUBLIC_ENVIRONMENT;
+  const apiUrl = environment === 'local' 
+  ? `http://localhost:5000/api/boards` 
+  : process.env.NEXT_PUBLIC_BOARD_URL + "/api/boards";
 
   useEffect(() => {
     fetchBoards();
@@ -83,7 +87,7 @@ const BoardsPage: React.FC = () => {
 
   const fetchBoards = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/boards', {
+      const response = await axios.get(`${apiUrl}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -99,7 +103,7 @@ const BoardsPage: React.FC = () => {
   const createBoard = async (title: string) => {
   try {
     const response = await axios.post(
-      'http://localhost:5000/api/boards',
+      `${apiUrl}`,
       {
         title,
         columns: [

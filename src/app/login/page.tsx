@@ -16,6 +16,12 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const router = useRouter();
+  const environment = process.env.NEXT_PUBLIC_ENVIRONMENT;
+
+  const apiUrl = environment === 'local' 
+  ? `http://localhost:5000/api/auth` 
+  : process.env.NEXT_PUBLIC_AUTH_URL ;
+
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -23,7 +29,7 @@ const Login: React.FC = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', formData);
+      const response = await axios.post(`${apiUrl}/login`, formData);
       const token = response.data.token;
 
       if (token) {

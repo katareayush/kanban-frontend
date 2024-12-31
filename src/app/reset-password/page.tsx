@@ -1,131 +1,217 @@
-"use client";
-import { useState, FormEvent , Suspense} from 'react';
+"use client"
+import { useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
-import { useRouter, useSearchParams } from 'next/navigation';
 
-const ResetPassword = () => {
+interface FormData {
+  username: string;
+  email: string;
+  password: string;
+}
+
+interface SignupResponse {
+  token: string;
+  message?: string;
+}
+
+const environment = process.env.NEXT_PUBLIC_ENVIRONMENT;
+const apiUrl = environment === 'local' 
+  ? `http://localhost:5000/api/auth` 
+  : process.env.NEXT_PUBLIC_AUTH_URL;
+
+const api = axios.create({
+  baseURL: apiUrl,
+  headers: { 
+    'Content-Type': 'application/json'
+  }
+});
+
+export default function Signup() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get('token');
-  const email = searchParams.get('email');
-  
-  const [formData, setFormData] = useState({
-    newPassword: '',
-    confirmPassword: ''
+  const [formData, setFormData] = useState<FormData>({
+    username: '',
+    email: '',
+    password: ''
   });
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [verificationSent, setVerificationSent] = useState<boolean>(false);
+  const [emailStatus, setEmailStatus] = useState<'sending' | 'sent' | 'error' | null>(null);
 
-    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (formData.newPassword !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-  
     setLoading(true);
     setError('');
-    setMessage('');
-  
+    setEmailStatus('sending');
+
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/reset-password', {
-        token,
-        newPassword: formData.newPassword
-      });
-  
-      setMessage(response.data.message);
-      setTimeout(() => {
-        router.push('/login');
-      }, 3000);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'An error occurred. Please try again.');
+      const { data } = await api.post<SignupResponse>('/signup', formData);
+      
+      setEmailStatus('sent');
+      setVerificationSent(true);
+
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        if (err.code === 'ERR_NETWORK') {
+          setError('Cannot connect to the server. Please try again later.');
+        } else if (err.response?.data?.message.includes('username')) {
+          setError('This username is already taken. Please choose another username.');
+        } else if (err.response?.data?.message.includes('email') || err.response?.data?.message === 'User already exists') {
+          setError('An account with this email already exists. Please try logging in instead.');
+        } else {
+          setError(err.response?.data?.message || 'Failed to create account. Please try again.');
+        }
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred. Please try again later.');
+      }
+      setEmailStatus('error');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="flex justify-center items-center min-h-screen font-mono">
-      <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-300 w-[400px] m-4">
-        <h1 className="text-2xl font-bold mb-6">Reset Password</h1>
-        
-        {message && (
-          <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-4">
-            <p className="text-green-700">{message}</p>
-          </div>
-        )}
+  const handleResendVerification = async () => {
+    setLoading(true);
+    setError('');
+    setEmailStatus('sending');
+  
+    try {
+      const response = await api.get(`/verify-email?resend=true&email=${encodeURIComponent(formData.email)}`);
+      
+      if (response.data.success) {
+        setEmailStatus('sent');
+        setError('Verification email has been resent. Please check your inbox.');
+      } else {
+        throw new Error(response.data.message || 'Failed to resend verification email');
+      }
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.message || 'Failed to resend verification email. Please try again.');
+      } else {
+        setError('Failed to resend verification email. Please try again.');
+      }
+      setEmailStatus('error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
-            <p className="text-red-700">{error}</p>
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              New Password
-            </label>
-            <input
-              type="password"
-              value={formData.newPassword}
-              onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-              required
-              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#75d22e] focus:border-transparent"
-              placeholder="Enter new password"
-            />
-          </div>
+  if (verificationSent) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-300 w-[400px] font-mono">
+          <div className="text-center space-y-4">
+            <div className="h-12 w-12 rounded-full bg-[#75d22e]/20 flex items-center justify-center mx-auto">
+              <svg
+                className="h-6 w-6 text-[#75d22e]"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold">Check Your Email</h2>
+            <p className="text-gray-600">
+              We've sent a verification link to <span className="font-semibold">{formData.email}</span>
+            </p>
+            <p className="text-sm text-gray-500">
+              Please check your inbox and spam folder. The email should arrive within a few minutes.
+            </p>
+            <div className="mt-4">
+              <button
+                onClick={handleResendVerification}
+                disabled={loading}
+                className="text-[#75d22e] hover:text-[#64b524] text-sm disabled:opacity-50"
+              >
+                {loading ? 'Resending...' : "Didn't receive the email? Click to resend"}
+              </button>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Confirm Password
-            </label>
-            <input
-              type="password"
-              value={formData.confirmPassword}
-              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-              required
-              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#75d22e] focus:border-transparent"
-              placeholder="Confirm new password"
-            />
+            <div className='mt-4'>
+                <button onClick={()=>{router.push('/login')}} className="flex-1 px-4 py-2 bg-[#75d22e] text-white font-mono rounded-lg hover:bg-[#64b524]">
+                    Continue to Login
+                </button>
+            </div>
           </div>
-          
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full px-8 py-3 bg-[#75d22e] text-white font-bold rounded-full 
-              hover:bg-[#64b524] transition-all
-              ${loading ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
-          >
-            {loading ? 'Resetting...' : 'Reset Password'}
-          </button>
-        </form>
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  }
 
-function LoadingFallback() {
   return (
     <div className="flex justify-center items-center h-screen">
       <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-300 w-[400px] font-mono">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#75d22e]" />
-          <h1 className="text-2xl font-bold">Loading...</h1>
-          <p className="text-gray-600">Please wait...</p>
-        </div>
+        <h1 className="text-2xl font-bold mb-6">Sign Up</h1>
+        
+        {error && (
+          <div className="bg-red-50 text-red-500 p-3 rounded-md mb-4">
+            {error}
+            {error.includes('already exists') && (
+              <div className="mt-2 text-sm">
+                <a href="/login" className="text-[#75d22e] hover:text-[#64b524]">
+                  Click here to login →
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm mb-1">Username</label>
+              <input
+                type="text"
+                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={formData.username}
+                onChange={(e) => setFormData({...formData, username: e.target.value})}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">Email</label>
+              <input
+                type="email"
+                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">Password</label>
+              <input
+                type="password"
+                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={formData.password}
+                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                required
+                minLength={6}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-[#75d22e] text-white p-2 rounded hover:bg-[#64b524] transition-colors disabled:opacity-50"
+              disabled={loading}
+            >
+              {loading ? (emailStatus === 'sending' ? 'Sending Verification...' : 'Creating Account...') : 'Sign Up'}
+            </button>
+
+            <div className="space-y-4">
+              Already have an account? <a href="/login" className="text-[#75d22e]">Login</a>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
-  );
-}
-
-
-export default function VerifyEmail() {
-  return (
-    <Suspense fallback={<LoadingFallback />}>
-      <ResetPassword/>
-    </Suspense>
   );
 }

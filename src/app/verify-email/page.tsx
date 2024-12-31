@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: process.env.NEXT_PUBLIC_AUTH_URL,
   headers: { 'Content-Type': 'application/json' }
 });
 
@@ -25,7 +25,7 @@ function VerifyEmailContent() {
       }
 
       try {
-        const { data } = await api.get(`http://localhost:5000/api/auth/verify-email?token=${token}`);
+        const { data } = await api.get(`/verify-email?token=${token}`);
         setStatus('success');
         setMessage(data.message || 'Email verified successfully!');
         setTimeout(() => {

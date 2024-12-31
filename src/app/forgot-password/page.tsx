@@ -8,6 +8,12 @@ const ForgotPassword = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const environment = process.env.NEXT_PUBLIC_ENVIRONMENT;
+
+  const apiUrl = environment === 'local' 
+  ? `http://localhost:5000/api/auth` 
+  : process.env.NEXT_PUBLIC_AUTH_URL ;
+
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -16,7 +22,7 @@ const ForgotPassword = () => {
     setMessage('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/forgot-password', { email });
+      const response = await axios.post(`${apiUrl}/forgot-password`, { email });
       setMessage(response.data.message);
     } catch (err: any) {
       setError(err.response?.data?.message || 'An error occurred. Please try again.');

@@ -14,8 +14,13 @@ interface SignupResponse {
   message?: string;
 }
 
+const environment = process.env.NEXT_PUBLIC_ENVIRONMENT;
+const apiUrl = environment === 'local' 
+  ? `http://localhost:5000/api/auth` 
+  : process.env.NEXT_PUBLIC_AUTH_URL;
+
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: apiUrl,
   headers: { 
     'Content-Type': 'application/json'
   }
@@ -41,7 +46,7 @@ export default function Signup() {
 
     try {
       // First attempt to create the account
-      const { data } = await api.post<SignupResponse>('/auth/signup', formData);
+      const { data } = await api.post<SignupResponse>('/signup', formData);
       
       setEmailStatus('sent');
       setVerificationSent(true);
@@ -74,7 +79,7 @@ export default function Signup() {
     setEmailStatus('sending');
   
     try {
-      const response = await api.get(`/auth/verify-email?resend=true&email=${encodeURIComponent(formData.email)}`);
+      const response = await api.get(`/verify-email?resend=true&email=${encodeURIComponent(formData.email)}`);
       
       if (response.data.success) {
         setEmailStatus('sent');

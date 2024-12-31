@@ -83,6 +83,7 @@ const SortableTask = React.memo(({ task, onEdit, onDelete, columnId }: {
         transition,
     };
 
+
     return (
         <div
             ref={setNodeRef}
@@ -306,6 +307,13 @@ const BoardPage = () => {
         task?: Task;
         columnId: string;
     }>({ isOpen: false, columnId: '' });
+    
+    const environment = process.env.NEXT_PUBLIC_ENVIRONMENT;
+
+    const apiUrl = environment === 'local' 
+  ? `http://localhost:5000/api/boards/${params.id}` 
+  : `${process.env.NEXT_PUBLIC_BOARD_URL}/api/boards/${params.id}`;
+
 
     const handleDragStart = (event: DragStartEvent) => {
         const { active } = event;
@@ -333,13 +341,13 @@ const BoardPage = () => {
 
     const fetchBoard = async () => {
         try {
-            const response = await axios.get(`http://localhost:5000/api/boards/${params.id}`, {
+            const response = await axios.get(`${apiUrl}/${params.id}`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem(`token`)}` }
             });
             setBoard(response.data);
             setError(null);
         } catch (err) {
-            const error = err as Error;  // Explicitly cast err as Error
+            const error = err as Error;
             console.error('Error details:', error.message);
             setError('Failed to load board');
         } finally {
@@ -427,7 +435,7 @@ const BoardPage = () => {
 
             // Update server
             await axios.put(
-                `http://localhost:5000/api/boards/${params.id}`,
+                `${apiUrl}/${params.id}`,
                 { columns: newColumns },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
             );
@@ -454,7 +462,7 @@ const BoardPage = () => {
             const newColumns = [...board.columns, newColumn];
 
             const response = await axios.put(
-                `http://localhost:5000/api/boards/${params.id}`,
+                `${apiUrl}/${params.id}`,
                 { columns: newColumns },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
             );
@@ -478,7 +486,7 @@ const BoardPage = () => {
             const newColumns = board.columns.filter(col => col._id !== columnId);
 
             const response = await axios.put(
-                `http://localhost:5000/api/boards/${params.id}`,
+                `${apiUrl}/${params.id}`,
                 { columns: newColumns },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
             );
@@ -535,7 +543,7 @@ const BoardPage = () => {
             });
 
             const response = await axios.put(
-                `http://localhost:5000/api/boards/${params.id}`,
+                `${apiUrl}/${params.id}`,
                 { columns: newColumns },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
             );
@@ -564,7 +572,7 @@ const BoardPage = () => {
             });
 
             const response = await axios.put(
-                `http://localhost:5000/api/boards/${params.id}`,
+                `${apiUrl}/${params.id}`,
                 { columns: newColumns },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
             );
