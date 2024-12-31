@@ -311,8 +311,8 @@ const BoardPage = () => {
     const environment = process.env.NEXT_PUBLIC_ENVIRONMENT;
 
     const apiUrl = environment === 'local' 
-  ? `http://localhost:5000/api/boards/` 
-  : `${process.env.NEXT_PUBLIC_BOARD_URL}/api/boards/`;
+  ? `http://localhost:5000/api/boards` 
+  : `${process.env.NEXT_PUBLIC_BOARD_URL}/api/boards`;
 
 
     const handleDragStart = (event: DragStartEvent) => {
