@@ -2,6 +2,7 @@
 import { useState, FormEvent } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
+import { HomeIcon } from 'lucide-react';
 
 interface LoginData {
   email: string;
@@ -47,6 +48,14 @@ const Login: React.FC = () => {
 
   return (
     <div className="flex justify-center items-center min-h-screen font-mono">
+        <button
+        onClick={() => router.push('/')}
+        className="absolute top-8 left-8 p-2 text-gray-600 hover:text-gray-900 transition-colors"
+        aria-label="Back to landing page"
+      >
+        <HomeIcon size={30} />
+        
+      </button>
       <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-300 w-[400px] m-4">
         <h1 className="text-2xl font-bold mb-6">Login</h1>
         

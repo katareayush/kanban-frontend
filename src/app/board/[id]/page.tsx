@@ -23,7 +23,7 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, MoreVertical, X, Edit2, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, MoreVertical, X, Edit2, Trash2, AlertTriangle, HomeIcon, ChevronLeft } from 'lucide-react';
 import axios from 'axios';
 
 interface Task {
@@ -605,7 +605,14 @@ const BoardPage = () => {
         >
             <div className="h-screen flex flex-col overflow-hidden">
                 <div className="flex-shrink-0 p-6">
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center"><button
+        onClick={() => router.push('/boards')}
+        className="top-8 left-8 p-2 text-gray-600 hover:text-gray-900 transition-colors"
+        aria-label="Back to landing page"
+      >
+        <ChevronLeft size={30} />
+        
+      </button>
                         <h1 className="text-3xl font-bold font-mono">{board?.title}</h1>
                         <div className="flex gap-4">
                             <button

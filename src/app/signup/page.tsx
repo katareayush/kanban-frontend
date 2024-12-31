@@ -2,6 +2,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
+import { ChevronLeft, HomeIcon } from 'lucide-react';
 
 interface FormData {
   username: string;
@@ -146,7 +147,16 @@ export default function Signup() {
   }
 
   return (
-    <div className="flex justify-center items-center h-screen">
+    <div className="flex justify-center items-center h-screen relative">
+      <button
+        onClick={() => router.push('/')}
+        className="absolute top-8 left-8 p-2 text-gray-600 hover:text-gray-900 transition-colors"
+        aria-label="Back to landing page"
+      >
+        <HomeIcon size={30} />
+        
+      </button>
+
       <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-300 w-[400px] font-mono">
         <h1 className="text-2xl font-bold mb-6">Sign Up</h1>
         
@@ -215,4 +225,4 @@ export default function Signup() {
       </div>
     </div>
   );
-}
+};
